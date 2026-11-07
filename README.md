@@ -1,10 +1,11 @@
-# NEXORA
+# KAIRO
+### Kaushik's AI for Interactive Reasoning and Orchestration
 
-### Personal Desktop AI Assistant powered by Model Context Protocol (MCP)
+**Personal Desktop AI Assistant powered by Model Context Protocol (MCP)**
 
-NEXORA is an extensible personal desktop AI assistant designed to interact with local applications, manage files, automate desktop operations, and execute tasks through natural-language instructions.
+KAIRO is an extensible personal desktop AI assistant designed to interact with local applications, manage files, automate desktop operations, and execute tasks through natural-language instructions.
 
-Built using Python and the Model Context Protocol (MCP), NEXORA aims to bridge AI reasoning with real-world desktop capabilities.
+Built using Python and the Model Context Protocol (MCP), KAIRO aims to bridge AI reasoning with real-world desktop capabilities.
 
 > Building an intelligent desktop companion, one capability at a time.
 
@@ -12,7 +13,7 @@ Built using Python and the Model Context Protocol (MCP), NEXORA aims to bridge A
 
 ## Project Overview
 
-NEXORA follows a modular architecture in which AI reasoning, MCP clients, and MCP servers operate independently.
+KAIRO follows a modular architecture in which AI reasoning, MCP clients, and MCP servers operate independently.
 
 The project currently implements a Notepad MCP server with tools for creating, reading, updating, deleting, listing, and searching notes.
 
@@ -24,17 +25,17 @@ It also demonstrates MCP Resources, Resource Templates, Prompts, STDIO communica
                  USER
                    |
                    v
-          NEXORA AI ASSISTANT
+          KAIRO AI ASSISTANT
                    |
-             AI Reasoning
+              AI Reasoning
                    |
                    v
-            NEXORA CLIENT
+             KAIRO CLIENT
                    |
               MCP Protocol
                    |
                    v
-            NEXORA SERVERS
+             KAIRO SERVERS
                    |
           +--------+--------+
           |        |        |
@@ -42,7 +43,7 @@ It also demonstrates MCP Resources, Resource Templates, Prompts, STDIO communica
           |        |        |
           +--------+--------+
                    |
-             LOCAL STORAGE
+              LOCAL STORAGE
 ```
 
 *AI reasoning and desktop automation integration are planned development milestones.*
@@ -100,7 +101,7 @@ It also demonstrates MCP Resources, Resource Templates, Prompts, STDIO communica
 ## Project Structure
 
 ```text
-nexora/
+kairo/
 │
 ├── ai/
 │   └── __init__.py
@@ -140,9 +141,9 @@ nexora/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/kaushikbargaway/nexora.git
+git clone https://github.com/kaushikbargaway/kairo.git
 
-cd nexora
+cd kairo
 ```
 
 ### 2. Create a virtual environment
@@ -183,7 +184,7 @@ The client automatically launches the MCP server and discovers its available cap
 
 ## Testing with MCP Inspector
 
-NEXORA's MCP server can also be tested using the official MCP Inspector.
+KAIRO's MCP server can also be tested using the official MCP Inspector.
 
 ```bash
 npx -y @modelcontextprotocol/inspector
@@ -219,7 +220,7 @@ Inspect and test the available tools, resources, and prompts.
 
 ## Project Goals
 
-NEXORA aims to evolve into a personal desktop AI ecosystem capable of:
+KAIRO aims to evolve into a personal desktop AI ecosystem capable of:
 
 - Understanding natural-language instructions.
 - Interacting with local applications.
@@ -239,4 +240,4 @@ GitHub: [@kaushikbargaway](https://github.com/kaushikbargaway)
 
 ---
 
-* NEXORA is an actively developed personal project. Features and architecture will evolve as development progresses.*
+*KAIRO is an actively developed personal project. Features and architecture will evolve as development progresses.*
