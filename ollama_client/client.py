@@ -44,20 +44,11 @@ class KairoLLM:
         Maintain a helpful, intelligent and conversational tone.
         """
 
-    def generate_response(self, prompt):
+    def generate_response(self, messages):
 
         response = self.client.chat(
             model=self.model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": self.system_prompt
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
+            messages=messages,
             think=False,
             options={
                 "temperature": 0.7,
