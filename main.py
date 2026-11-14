@@ -1,80 +1,137 @@
+import asyncio
+
 from ollama_client.client import KairoLLM
 from conversation.manager import ConversationManager
 
+from client.mcp_client import MCPToolClient
+from agent.orchestrator import AgentOrchestrator
 
-def main():
+def approve_tool_execution(tool_name, arguments):
+
+    if tool_name == "delete_note":
+        filename = arguments.get("filename", "unknown file")
+
+        print(f"\n[KAIRO] Permission required!")
+        print(f"[KAIRO] You are about to delete: {filename}")
+
+        confirmation = input("Approve deletion? (yes/no): ").strip().lower()
+
+        return confirmation in ["yes", "y"]
+
+    return True
+
+async def main():
 
     # Initialize LLM
     ai = KairoLLM()
 
-    # Initialize Conversation Manager
-    conversation = ConversationManager(ai)
+    # Initialize MCP Client
+    mcp_client = MCPToolClient()
 
-    print("\n================================")
-    print("       KAIRO AI ASSISTANT")
-    print("================================")
+    try:
 
-    print(f"Model: {ai.model}")
-    print("Conversation Memory: Enabled")
+        # Connect to MCP Server
+        await mcp_client.connect()
 
-    print("\nAvailable Commands:")
-    print("/reset  - Reset conversation")
-    print("/history - View conversation history")
-    print("/exit   - Exit KAIRO")
+        # Initialize Agent Orchestrator
+        agent = AgentOrchestrator(
+            llm=ai,
+            mcp_client=mcp_client,
+            approval_callback=approve_tool_execution
+        )
 
-    print("\nKAIRO is ready!\n")
+        # Initialize Conversation Manager
+        conversation = ConversationManager(
+            llm=ai,
+            agent=agent,
+            max_exchanges=10
+        )
 
-    while True:
+        print("\n================================")
+        print("       KAIRO AI ASSISTANT")
+        print("================================")
 
-        user_input = input("You: ").strip()
+        print(f"Model: {ai.model}")
+        print("Conversation Memory: Enabled")
+        print("MCP Integration: Enabled")
 
-        if not user_input:
-            continue
+        print("\nAvailable Commands:")
+        print("/reset  - Reset conversation")
+        print("/history - View conversation history")
+        print("/exit   - Exit KAIRO")
 
-        command = user_input.lower()
+        print("\nKAIRO is ready!\n")
 
-        if command == "/exit":
+        while True:
 
-            print("\nKAIRO: Goodbye!")
-            break
+            user_input = input("You: ").strip()
 
-        elif command == "/reset":
+            if not user_input:
+                continue
 
-            conversation.reset_conversation()
+            command = user_input.lower()
 
-            print("\nKAIRO: Conversation reset successfully!\n")
-            continue
+            if command == "/exit":
 
-        elif command == "/history":
+                print("\nKAIRO: Goodbye!")
+                break
 
-            history = conversation.get_history()
+            elif command == "/reset":
 
-            print("\n--- Conversation History ---")
+                conversation.reset_conversation()
 
-            for message in history:
+                print("\nKAIRO: Conversation reset successfully!\n")
+                continue
 
-                if message["role"] == "system":
-                    continue
+            elif command == "/history":
 
-                role = message["role"].upper()
+                history = conversation.get_history()
 
-                print(f"\n{role}: {message['content']}")
+                print("\n--- Conversation History ---")
 
-            print("\n----------------------------\n")
-            continue
+                for message in history:
 
-        try:
+                    if message["role"] == "system":
+                        continue
 
-            response = conversation.send_message(
-                user_input
-            )
+                    role = message["role"].upper()
 
-            print(f"\nKAIRO: {response}\n")
+                    if message.get("tool_calls"):
 
-        except Exception as e:
+                        tool_names = [
+                            call["function"]["name"]
+                            for call in message["tool_calls"]
+                        ]
 
-            print(f"\nKAIRO Error: {e}\n")
+                        print(f"\n{role}: Requested tools {tool_names}")
+
+                    else:
+
+                        print(f"\n{role}: {message['content']}")
+
+                print("\n----------------------------\n")
+                continue
+
+            try:
+
+                response = await conversation.send_message(
+                    user_input
+                )
+
+                print(f"\nKAIRO: {response}\n")
+
+            except Exception as error:
+
+                print(f"\nKAIRO Error: {error}\n")
+
+    except ConnectionError as error:
+        print(f"\nKAIRO Error: {error}")
+        print("KAIRO could not start because the MCP server is unavailable.")
+
+    finally:
+
+        await mcp_client.disconnect()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

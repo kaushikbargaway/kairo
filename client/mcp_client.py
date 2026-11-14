@@ -1,135 +1,81 @@
-import asyncio
 import sys
 
 from mcp import Client, StdioServerParameters
 
 
-server_params = StdioServerParameters(
-    command=sys.executable,
-    args=["-m", "servers.notepad.server"]
-)
+class MCPToolClient:
 
+    def __init__(self):
 
-def display_menu():
-    print("\n========== NEXORA ==========")
-    print("1. Create Note")
-    print("2. Read Note")
-    print("3. Append Note")
-    print("4. List Notes")
-    print("5. Search Notes")
-    print("6. Delete Note")
-    print("7. Exit")
-    print("============================")
+        self.server_params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "servers.notepad.server"]
+        )
 
+        self.client_context = None
+        self.client = None
 
-async def main():
+    async def connect(self):
+        context = Client(self.server_params)
 
-    async with Client(server_params) as client:
+        try:
+            client = await context.__aenter__()
 
-        print("\nConnected to NEXORA MCP Server!")
+        except Exception as error:
+            self.client = None
+            self.client_context = None
 
-        while True:
+            raise ConnectionError(
+                "Failed to connect to KAIRO MCP Server. "
+                "Please check whether the server is available."
+            ) from error
 
-            display_menu()
+        self.client_context = context
+        self.client = client
 
-            choice = input("\nChoose an option: ").strip()
+        print("Connected to KAIRO MCP Server!")
 
-            try:
+    async def disconnect(self):
+        if self.client_context is None:
+            return
 
-                if choice == "1":
+        context = self.client_context
 
-                    filename = input("Enter filename: ").strip()
-                    content = input("Enter note content: ")
+        self.client_context = None
+        self.client = None
 
-                    result = await client.call_tool(
-                        "create_note",
-                        {
-                            "filename": filename,
-                            "content": content
-                        }
-                    )
+        await context.__aexit__(None, None, None)
 
-                    print("\n", result.content)
+        print("Disconnected from MCP Server.")
 
-                elif choice == "2":
+    async def reconnect(self):
+        print("\n[KAIRO] Attempting to reconnect to MCP Server...")
 
-                    filename = input("Enter filename: ").strip()
+        # Close the existing connection, if possible
+        try:
+            await self.disconnect()
 
-                    result = await client.call_tool(
-                        "read_note",
-                        {"filename": filename}
-                    )
+        except Exception as error:
+            print(f"[KAIRO] Warning during connection cleanup: {error}")
+            self.client = None
+            self.client_context = None
 
-                    print("\nNote Content:")
-                    print(result.content)
+        # Establish a fresh connection
+        await self.connect()
 
-                elif choice == "3":
+    async def list_tools(self):
 
-                    filename = input("Enter filename: ").strip()
-                    content = input("Enter additional content: ")
+        if not self.client:
+            raise RuntimeError("MCP client is not connected.")
 
-                    result = await client.call_tool(
-                        "append_note",
-                        {
-                            "filename": filename,
-                            "content": content
-                        }
-                    )
+        return await self.client.list_tools()
 
-                    print("\n", result.content)
+    async def call_tool(self, tool_name, arguments):
 
-                elif choice == "4":
+        if not self.client:
+            raise RuntimeError("MCP client is not connected.")
 
-                    result = await client.call_tool("list_notes", {})
-
-                    print("\nAvailable Notes:")
-                    print(result.content)
-
-                elif choice == "5":
-
-                    keyword = input("Enter search keyword: ").strip()
-
-                    result = await client.call_tool(
-                        "search_notes",
-                        {"keyword": keyword}
-                    )
-
-                    print("\nSearch Results:")
-                    print(result.content)
-
-                elif choice == "6":
-
-                    filename = input("Enter filename to delete: ").strip()
-
-                    confirmation = input(
-                        f"Are you sure you want to delete {filename}? (yes/no): "
-                    ).strip().lower()
-
-                    if confirmation == "yes":
-
-                        result = await client.call_tool(
-                            "delete_note",
-                            {"filename": filename}
-                        )
-
-                        print("\n", result.content)
-
-                    else:
-                        print("\nDeletion cancelled.")
-
-                elif choice == "7":
-
-                    print("\nShutting down NEXORA...")
-                    break
-
-                else:
-
-                    print("\nInvalid option. Try again.")
-
-            except Exception as error:
-
-                print(f"\nError: {error}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        return await self.client.call_tool(
+            tool_name,
+            arguments
+        )

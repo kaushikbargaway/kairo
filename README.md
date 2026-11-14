@@ -2,192 +2,228 @@
 
 ### Kaushik's AI for Interactive Reasoning and Orchestration
 
-**Personal Desktop AI Assistant powered by Ollama and Model Context Protocol (MCP)**
+**A Personal Desktop AI Assistant powered by Ollama and the Model
+Context Protocol (MCP)**
 
-KAIRO is an extensible personal desktop AI assistant designed to interact with local applications, manage files, automate desktop operations, and execute tasks through natural-language instructions.
+KAIRO is an extensible, locally running AI assistant designed to
+understand natural-language requests and interact with external tools
+through MCP.
 
-Built using Python, Ollama, and the Model Context Protocol (MCP), KAIRO aims to bridge local AI reasoning with real-world desktop capabilities.
+Built with Python, Ollama, and the MCP Python SDK, KAIRO combines local
+LLM inference, conversation management, agent orchestration, and an
+MCP-based tool execution layer.
 
 > Building an intelligent desktop companion, one capability at a time.
 
----
+------------------------------------------------------------------------
 
 ## Project Overview
 
-KAIRO follows a modular architecture in which AI reasoning, conversation management, MCP clients, and MCP servers operate independently.
+KAIRO uses a modular architecture that separates language-model
+interaction, conversation management, agent orchestration, MCP client
+communication, and MCP server capabilities.
 
-The project integrates a locally running Large Language Model (LLM) using **Ollama and Qwen3 1.7B**, enabling local inference without depending on external LLM APIs.
+The assistant currently uses **Qwen3 1.7B through Ollama** for local
+inference. The `ConversationManager` maintains contextual message
+history during an active session, while the `AgentOrchestrator`
+discovers MCP tools, makes them available to the LLM, executes requested
+tools, and feeds their results back into the conversation.
 
-KAIRO also implements a Conversation Manager that maintains conversation history, supports contextual interactions, and manages session-based memory.
+The current MCP integration includes a Notepad server with tools to
+create, read, append, delete, list, and search text notes. It also
+exposes MCP resources and prompts.
 
-The MCP infrastructure currently includes a Notepad MCP server with tools for creating, reading, updating, deleting, listing, and searching notes.
+KAIRO includes tool argument validation, approval before note deletion,
+MCP error handling, and automatic reconnection for recoverable
+connection failures. Read-only tool calls can be retried after
+reconnection. Potentially state-changing operations are not
+automatically repeated when their execution status is uncertain.
 
-The MCP implementation also demonstrates Resources, Resource Templates, Prompts, STDIO communication, and programmatic client-server interaction.
-
----
+------------------------------------------------------------------------
 
 ## Architecture
 
-```text
-                       USER
-                         |
-                         v
-                  KAIRO AI ASSISTANT
-                         |
-                  CONVERSATIONAL CLI
-                         |
-                         v
-                CONVERSATION MANAGER
-                         |
-                  MESSAGE HISTORY
-                         |
-                         v
-                    KAIRO LLM
-                         |
-                       Ollama
-                         |
+``` text
+                         USER
+                           |
+                           v
+                  KAIRO CONVERSATIONAL CLI
+                           |
+                           v
+                  CONVERSATION MANAGER
+                    Message History
+                           |
+                           v
+                      KAIRO LLM
+                        Ollama
                      Qwen3 1.7B
-                         |
-                         v
-                 AGENT ORCHESTRATOR
-                  (Under Development)
-                         |
-                    KAIRO CLIENT
-                         |
-                    MCP PROTOCOL
-                         |
-                         v
-                    KAIRO SERVERS
-                         |
-              +----------+----------+
-              |          |          |
-            TOOLS     RESOURCES   PROMPTS
-              |          |          |
-              +----------+----------+
-                         |
-                    LOCAL STORAGE
+                           |
+                           v
+                  AGENT ORCHESTRATOR
+             Tool Discovery and Execution Loop
+                           |
+                           v
+                     TOOL REGISTRY
+                MCP Schemas -> Ollama Tools
+                           |
+                           v
+                     TOOL EXECUTOR
+            Validation and Approval Management
+                           |
+                           v
+                      MCP CLIENT
+                  STDIO Communication
+                           |
+                           v
+                    NOTEPAD MCP SERVER
+                 +---------+---------+
+                 |         |         |
+               TOOLS   RESOURCES  PROMPTS
+                 |         |         |
+                 +---------+---------+
+                           |
+                           v
+                     LOCAL NOTES
 ```
 
-*The LLM, Conversation Manager, and MCP infrastructure provide the foundation for KAIRO. Automated LLM-driven MCP tool execution and agent orchestration are upcoming development milestones.*
-
----
+------------------------------------------------------------------------
 
 ## Current Features
 
 ### 1. Local LLM Integration
 
-- Integration with Ollama for local LLM inference.
-- Qwen3 1.7B as the default language model.
-- Python integration using the official Ollama SDK.
-- Local inference without external LLM APIs.
-- Configurable model selection.
-- Custom generation parameters.
-- Extended thinking disabled for faster responses.
+-   Local LLM inference through Ollama.
+-   Qwen3 1.7B as the default language model.
+-   Integration through the Ollama Python SDK.
+-   Configurable model selection and generation parameters.
+-   No external LLM API required for inference.
 
-### 2. AI Assistant Interface
+### 2. Conversational CLI
 
-- Interactive terminal-based conversational interface.
-- Natural-language interaction with KAIRO.
-- Custom system prompt defining KAIRO's identity and behaviour.
-- Locally generated AI responses.
-- Configurable response generation parameters.
+-   Interactive terminal-based interface.
+-   Natural-language interaction with KAIRO.
+-   Custom system prompt defining KAIRO's identity and behaviour.
+-   Context-aware responses using conversation history.
 
-### 3. Conversation Memory and Context Management
+**Available commands**
 
-- Dedicated Conversation Manager module.
-- Maintains conversation history during active sessions.
-- Sends previous messages to the LLM for contextual understanding.
-- Supports contextual follow-up questions.
-- Configurable conversation history limits.
-- Conversation reset functionality.
-- Conversation history inspection through CLI commands.
+  Command      Description
+  ------------ --------------------------------
+  `/reset`     Reset the current conversation
+  `/history`   Display conversation history
+  `/exit`      Exit KAIRO
 
-**Available Commands**
+### 3. Conversation Management
 
-| Command | Description |
-|---|---|
-| `/reset` | Reset the current conversation |
-| `/history` | Display conversation history |
-| `/exit` | Exit KAIRO |
+-   Dedicated `ConversationManager`.
+-   Maintains message history during an active session.
+-   Supports contextual follow-up questions.
+-   Configurable conversation history limit.
+-   Trims history by complete user exchanges, preserving associated tool
+    calls and results.
+-   Conversation reset and history inspection.
 
-*Conversation history is currently maintained in RAM. Persistent memory across application restarts is planned.*
+*Conversation history is currently maintained in memory and is not
+persisted across application restarts.*
 
-### 4. MCP Server
+### 4. Agent Orchestration
 
-- Python-based MCP server.
-- STDIO transport.
-- Modular server architecture.
-- Automatic tool schema generation.
+-   Discovers available MCP tools at runtime.
+-   Converts MCP tool schemas into Ollama-compatible function
+    definitions.
+-   Supports LLM-driven tool selection and execution.
+-   Runs a bounded tool-calling loop for multi-step interactions.
+-   Returns tool results to the LLM for further reasoning.
+-   Handles MCP tool errors and execution failures.
 
-### 5. Notepad MCP Tools
+### 5. MCP Tool Execution and Safety
 
-| Tool | Description |
-|---|---|
-| `create_note` | Create a text note |
-| `read_note` | Read an existing note |
-| `append_note` | Append content to a note |
-| `list_notes` | List available notes |
-| `delete_note` | Delete a note |
-| `search_notes` | Search across notes |
+-   Validates tool arguments against required and supported schema
+    properties.
+-   Requests user approval before executing `delete_note`.
+-   Prevents deletion when approval is unavailable or declined.
+-   Distinguishes MCP tool errors using the SDK's `is_error` result
+    field.
+-   Uses conservative retry behaviour for potentially state-changing
+    operations when connection status is uncertain.
 
-### 6. MCP Resources
+### 6. MCP Connection Management
 
-- `notes://list` – Discover available notes.
-- `note://{filename}` – Access individual note contents.
+-   Establishes and closes MCP client sessions.
+-   Handles MCP server startup failures with a readable error.
+-   Detects connection-related failures during tool discovery and
+    execution.
+-   Attempts to reconnect when the MCP connection is lost.
+-   Retries eligible read-only operations once after successful
+    reconnection.
+-   Avoids automatically repeating write or delete operations when the
+    outcome may be uncertain.
 
-### 7. MCP Prompts
+### 7. Notepad MCP Server
 
-- `summarize_note` – Generate note summarization instructions.
-- `improve_note` – Generate note improvement instructions.
+The Notepad MCP server uses Python and STDIO transport.
 
-### 8. MCP Client
+  Tool             Description
+  ---------------- -------------------------------------------------
+  `create_note`    Create a text note
+  `read_note`      Read an existing note
+  `append_note`    Append content to a note
+  `list_notes`     List available notes
+  `delete_note`    Delete a note (requires approval through KAIRO)
+  `search_notes`   Search across notes
 
-- Establishes STDIO communication.
-- Discovers server capabilities.
-- Lists available tools, resources, and prompts.
-- Executes MCP tools programmatically.
-- Provides an interactive CLI.
+### 8. MCP Resources
 
----
+-   `notes://list` -- Discover available notes.
+-   `note://{filename}` -- Access an individual note's contents.
+
+### 9. MCP Prompts
+
+-   `summarize_note` -- Provides instructions for summarizing a note.
+-   `improve_note` -- Provides instructions for improving a note.
+
+------------------------------------------------------------------------
 
 ## Technology Stack
 
-| Category | Technology |
-|---|---|
-| Programming Language | Python |
-| Local LLM Runtime | Ollama |
-| Language Model | Qwen3 1.7B |
-| LLM Integration | Ollama Python SDK |
-| AI Architecture | Modular LLM-based architecture |
-| Conversation Management | Custom Python Module |
-| Protocol | Model Context Protocol |
-| MCP SDK | Python MCP SDK |
-| Communication | STDIO |
-| Client | Python |
-| Testing | MCP Inspector |
-| Version Control | Git & GitHub |
+  Category                    Technology
+  --------------------------- ------------------------------------
+  Programming Language        Python
+  Local LLM Runtime           Ollama
+  Language Model              Qwen3 1.7B
+  LLM Integration             Ollama Python SDK
+  Agent Architecture          Custom Python agent orchestrator
+  Conversation Management     Custom Python module
+  Tool Integration Protocol   Model Context Protocol
+  MCP SDK                     Python MCP SDK
+  Communication Transport     STDIO
+  Testing and Inspection      Python test scripts, MCP Inspector
+  Version Control             Git and GitHub
 
----
+------------------------------------------------------------------------
 
 ## Project Structure
 
-```text
+``` text
 kairo/
 │
-├── ai/
-│   └── __init__.py
+├── agent/
+│   ├── __init__.py
+│   ├── orchestrator.py
+│   ├── tool_executor.py
+│   └── tool_registry.py
 │
 ├── client/
 │   ├── __init__.py
 │   └── mcp_client.py
 │
-├── ollama_client/
-│   ├── __init__.py
-│   └── client.py
-│
 ├── conversation/
 │   ├── __init__.py
 │   └── manager.py
+│
+├── ollama_client/
+│   ├── __init__.py
+│   └── client.py
 │
 ├── servers/
 │   ├── __init__.py
@@ -202,7 +238,6 @@ kairo/
 │
 ├── notes/
 ├── tests/
-├── logs/
 │
 ├── main.py
 ├── .gitignore
@@ -210,184 +245,187 @@ kairo/
 └── README.md
 ```
 
----
+------------------------------------------------------------------------
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.11 or newer
-- Git
-- Ollama
-- Node.js and npm (for MCP Inspector)
+-   Python 3.11 or newer
+-   Git
+-   Ollama
 
 ### 1. Clone the Repository
 
-```bash
+``` bash
 git clone https://github.com/kaushikbargaway/kairo.git
-
 cd kairo
 ```
 
-### 2. Create a Virtual Environment
+### 2. Create and Activate a Virtual Environment
 
-```bash
+``` powershell
 python -m venv .venv
-```
-
-Activate it on Windows PowerShell:
-
-```powershell
 .venv\Scripts\Activate.ps1
 ```
 
+If PowerShell blocks script execution in the current terminal, you can
+run:
+
+``` powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+```
+
+Then activate the environment again.
+
 ### 3. Install Dependencies
 
-```bash
+``` powershell
 python -m pip install -r requirements.txt
 ```
 
-### 4. Install Ollama
+### 4. Install Ollama and Pull the Model
 
-Download and install Ollama:
+Install Ollama from the [official download
+page](https://ollama.com/download).
 
-https://ollama.com/download
+Pull KAIRO's default model:
 
-Pull the default KAIRO language model:
-
-```powershell
+``` powershell
 ollama pull qwen3:1.7b
 ```
 
-Verify the installation:
+Verify that the model is available:
 
-```powershell
+``` powershell
 ollama list
 ```
 
-Ensure the Ollama service is running.
+Ensure the Ollama service is running before launching KAIRO.
 
 ### 5. Launch KAIRO
 
-Start the conversational AI interface:
+From the project root, run:
 
-```powershell
+``` powershell
 python main.py
 ```
 
-KAIRO connects to the locally running Ollama instance and generates responses using Qwen3 1.7B.
+KAIRO connects to the local Ollama service and launches its Notepad MCP
+server through the MCP client using STDIO. **You do not need to start
+the Notepad MCP server in a separate terminal.**
 
-### 6. Start the MCP Server
+------------------------------------------------------------------------
 
-```powershell
-python -m servers.notepad.server
+## Testing
+
+Test scripts are kept in the root-level `tests/` directory.
+
+Run a test module from the project root using:
+
+``` powershell
+python -m tests.test_reconnect
 ```
 
-The server communicates through STDIO and is designed to be launched by an MCP client.
+Replace `test_reconnect` with the relevant test module name. Individual
+test scripts may have their own setup requirements.
 
-### 7. Run the MCP Client
+### Testing the MCP Server with MCP Inspector
 
-In another terminal:
+The Notepad MCP server can also be inspected using the official MCP
+Inspector.
 
-```powershell
-python -m client.mcp_client
-```
-
-The client automatically launches the MCP server and discovers its available capabilities.
-
----
-
-## Testing with MCP Inspector
-
-KAIRO's MCP server can also be tested using the official MCP Inspector.
-
-```bash
+``` bash
 npx -y @modelcontextprotocol/inspector
 ```
 
-Configure the server:
+Configure the server with:
 
-| Setting | Value |
-|---|---|
-| Command | `.venv/Scripts/python.exe` |
-| Arguments | `-m servers.notepad.server` |
-| Working Directory | Project root |
+  Setting             Value
+  ------------------- -----------------------------------------
+  Command             Path to the project's Python executable
+  Arguments           `-m servers.notepad.server`
+  Working Directory   KAIRO project root
 
-Inspect and test the available tools, resources, and prompts.
+Use the Inspector to explore and test the server's tools, resources, and
+prompts.
 
----
+------------------------------------------------------------------------
 
 ## Development Roadmap
 
 ### Phase 1: MCP Foundation
 
-- [x] Initial MCP server implementation
-- [x] Notepad MCP tools
-- [x] MCP Resources and Resource Templates
-- [x] MCP Prompts
-- [x] Modular server architecture
-- [x] Custom Python MCP client
-- [x] Interactive CLI
+-   [x] Initial MCP server implementation
+-   [x] Notepad MCP tools
+-   [x] MCP resources and resource templates
+-   [x] MCP prompts
+-   [x] Modular server architecture
+-   [x] Custom Python MCP client
+-   [x] STDIO client-server communication
 
-### Phase 2: Local AI Integration
+### Phase 2: Local AI and Conversation
 
-- [x] Ollama installation and configuration
-- [x] Local LLM integration
-- [x] Qwen3 model integration
-- [x] Python Ollama SDK integration
-- [x] Custom KAIRO system prompt
-- [x] Conversational terminal interface
-- [x] Lightweight model optimisation
-- [x] Conversation history and context management
-- [x] Conversation reset functionality
-- [x] Conversation history inspection
-- [ ] Persistent conversational memory
+-   [x] Ollama integration
+-   [x] Qwen3 model integration
+-   [x] Custom KAIRO system prompt
+-   [x] Conversational terminal interface
+-   [x] Conversation history and context management
+-   [x] Conversation reset functionality
+-   [x] Conversation history inspection
+-   [ ] Persistent conversational memory
 
 ### Phase 3: Intelligent Agent Architecture
 
-- [ ] AI-powered MCP tool discovery
-- [ ] LLM-driven MCP tool selection and execution
-- [ ] Agent orchestration
-- [ ] Multi-step task execution
-- [ ] Context-aware tool invocation
-- [ ] Tool execution feedback and error handling
+-   [x] MCP tool discovery
+-   [x] MCP-to-Ollama tool schema conversion
+-   [x] LLM-driven tool selection and execution
+-   [x] Agent orchestration
+-   [x] Multi-step tool-calling loop
+-   [x] Tool argument validation
+-   [x] Tool execution error handling
+-   [x] Approval workflow for note deletion
+-   [x] MCP startup failure handling
+-   [x] MCP reconnection and read-operation retry
+-   [ ] Expanded automated test coverage
+-   [ ] More comprehensive retry and recovery tests
 
 ### Phase 4: Desktop Capabilities
 
-- [ ] Filesystem MCP server
-- [ ] File and directory management
-- [ ] Desktop automation
-- [ ] Application interaction
-- [ ] Voice-based interaction
-- [ ] Multi-server MCP architecture
+-   [ ] Filesystem MCP server
+-   [ ] File and directory management
+-   [ ] Desktop automation
+-   [ ] Application interaction
+-   [ ] Voice-based interaction
+-   [ ] Multi-server MCP architecture
 
 ### Phase 5: User Experience and Security
 
-- [ ] Desktop application interface
-- [ ] Real-time voice interaction
-- [ ] Security and permission management
-- [ ] Execution approval workflows
-- [ ] Logging and monitoring
+-   [ ] Desktop application interface
+-   [ ] Real-time voice interaction
+-   [ ] Expanded security and permission management
+-   [ ] Logging and monitoring
+-   [ ] Persistent memory and user preferences
 
----
+------------------------------------------------------------------------
 
 ## Project Goals
 
 KAIRO aims to evolve into a personal desktop AI ecosystem capable of:
 
-- Understanding natural-language instructions.
-- Running local language models.
-- Maintaining contextual conversations.
-- Remembering useful information across sessions.
-- Interacting with external tools through MCP.
-- Managing files and directories.
-- Automating desktop operations.
-- Supporting voice-based interaction.
-- Integrating multiple MCP servers.
-- Executing complex multi-step tasks.
-- Providing secure, permission-controlled automation.
+-   Understanding natural-language instructions.
+-   Running local language models.
+-   Maintaining contextual conversations.
+-   Remembering useful information across sessions.
+-   Interacting with tools through MCP.
+-   Managing files and directories.
+-   Automating desktop operations.
+-   Supporting voice-based interaction.
+-   Integrating multiple MCP servers.
+-   Executing complex multi-step tasks.
+-   Providing secure, permission-controlled automation.
 
----
+------------------------------------------------------------------------
 
 ## Author
 
@@ -397,6 +435,7 @@ B.E. Information Science and Engineering
 
 GitHub: [@kaushikbargaway](https://github.com/kaushikbargaway)
 
----
+------------------------------------------------------------------------
 
-*KAIRO is an actively developed personal project. Features and architecture will evolve as development progresses.*
+*KAIRO is an actively developed personal project. Features and
+architecture will evolve as development progresses.*

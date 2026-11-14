@@ -44,16 +44,17 @@ class KairoLLM:
         Maintain a helpful, intelligent and conversational tone.
         """
 
-    def generate_response(self, messages):
+    def generate_response(self, messages, tools=None):
 
         response = self.client.chat(
             model=self.model,
             messages=messages,
+            tools=tools if tools else [],
             think=False,
             options={
                 "temperature": 0.7,
-                "num_predict": 256
+                "num_predict": 512
             }
         )
 
-        return response.message.content
+        return response.message
