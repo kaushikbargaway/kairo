@@ -1,78 +1,103 @@
-import asyncio
+from types import SimpleNamespace
 
-from ollama_client.client import KairoLLM
-from client.mcp_client import MCPToolClient
-from agent.tool_registry import ToolRegistry
-from agent.tool_executor import ToolExecutor
+import pytest
+
+from agent.orchestrator import AgentOrchestrator
 
 
-async def main():
+class FakeMCPClient:
 
-    mcp_client = MCPToolClient()
-    registry = ToolRegistry()
-    llm = KairoLLM()
+    def __init__(self):
+        self.call_count = 0
+        self.reconnect_count = 0
 
-    try:
-        # 1. Connect to MCP server
-        await mcp_client.connect()
-
-        # 2. Discover and register tools
-        response = await mcp_client.list_tools()
-        ollama_tools = registry.register_tools(response.tools)
-
-        # 3. Initialize tool executor
-        executor = ToolExecutor(mcp_client, registry)
-
-        # 4. Prepare user request
-        messages = [
-            {
-                "role": "system",
-                "content": llm.system_prompt
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Create a note named ideas.txt containing "
-                    "three ideas for AI projects."
-                )
+    async def list_tools(self):
+        tool = SimpleNamespace(
+            name="read_note",
+            description="Read a note",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "filename": {"type": "string"}
+                },
+                "required": ["filename"]
             }
-        ]
-
-        # 5. Ask LLM to select a tool
-        response = llm.generate_response(
-            messages,
-            tools=ollama_tools
         )
 
-        # 6. Execute requested tools
-        if response.tool_calls:
+        return SimpleNamespace(tools=[tool])
 
-            for tool_call in response.tool_calls:
+    async def call_tool(self, tool_name, arguments):
+        self.call_count += 1
 
-                tool_name = tool_call.function.name
-                arguments = tool_call.function.arguments
+        assert tool_name == "read_note"
+        assert arguments == {"filename": "test.txt"}
 
-                print(f"\nRequested Tool: {tool_name}")
-                print(f"Arguments: {arguments}")
+        return SimpleNamespace(
+            content=[
+                SimpleNamespace(text="This is a test note.")
+            ],
+            is_error=False
+        )
 
-                result = await executor.execute(
-                    tool_name,
-                    arguments
+    async def reconnect(self):
+        self.reconnect_count += 1
+
+
+class FakeLLM:
+
+    def __init__(self):
+        self.call_count = 0
+
+    def generate_response(self, messages, tools=None):
+        self.call_count += 1
+
+        if self.call_count == 1:
+            tool_call = SimpleNamespace(
+                function=SimpleNamespace(
+                    name="read_note",
+                    arguments={"filename": "test.txt"}
                 )
+            )
 
-                print("\n========== EXECUTION RESULT ==========")
-                print(result.content)
+            return SimpleNamespace(
+                tool_calls=[tool_call],
+                content=""
+            )
 
-        else:
-            print("No tool calls generated.")
-            print(response.content)
-
-    except Exception as error:
-        print(f"Error: {error}")
-
-    finally:
-        await mcp_client.disconnect()
+        return SimpleNamespace(
+            tool_calls=[],
+            content="The note contains: This is a test note."
+        )
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+@pytest.mark.asyncio
+async def test_successful_tool_execution():
+
+    mcp_client = FakeMCPClient()
+    llm = FakeLLM()
+
+    agent = AgentOrchestrator(
+        llm=llm,
+        mcp_client=mcp_client
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are KAIRO."
+        },
+        {
+            "role": "user",
+            "content": "Read test.txt."
+        }
+    ]
+
+    response = await agent.process_request(messages)
+
+    assert mcp_client.call_count == 1
+    assert mcp_client.reconnect_count == 0
+    assert llm.call_count == 2
+
+    assert response == (
+        "The note contains: This is a test note."
+    )
