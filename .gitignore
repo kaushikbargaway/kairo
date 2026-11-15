@@ -29,3 +29,14 @@ Thumbs.db
 # Generated notes
 notes/*.txt
 !notes/.gitkeep
+
+# KAIRO conversation database
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Test coverage
+.coverage
+.coverage.*
+htmlcov/

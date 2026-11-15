@@ -22,9 +22,14 @@ communication, and MCP server capabilities.
 
 The current implementation uses **Qwen3 1.7B through Ollama** for local
 inference. The `ConversationManager` maintains contextual message
-history during an active session, while the `AgentOrchestrator`
-discovers MCP tools, exposes them to the LLM, executes requested tools,
-and returns their results to the conversation.
+history and integrates with a SQLite-backed `ConversationStore` to
+persist conversations across application restarts. KAIRO can restore the
+most recently updated conversation, start new conversations, list saved
+conversations, resume a conversation by ID, and delete a conversation
+with user confirmation.
+
+The `AgentOrchestrator` discovers MCP tools, exposes them to the LLM,
+executes requested tools, and returns their results to the conversation.
 
 The current MCP integration includes a Notepad server with six tools,
 two resources, and two prompts. KAIRO also includes argument validation,
@@ -33,19 +38,13 @@ and controlled retry behaviour.
 
 ### Current Test Status
 
-  Metric                                   Result
-  ------------------------------- ---------------
-  Tests collected                             113
-  Passed                                  **111**
-  Skipped                                       2
-  Failed                                    **0**
-  Statement coverage                     **100%**
-  Statements measured                         300
-  Execution time (recorded run)     41.03 seconds
-
-The two skipped tests are optional Ollama integration tests. They
+The full automated test suite has passed during v0.2.0 development. The
+two optional Ollama integration tests are skipped by default. They
 require the `KAIRO_RUN_OLLAMA_INTEGRATION=1` environment variable and a
 running local Ollama instance.
+
+Run the coverage command in the [Testing](#testing) section to generate
+the current local coverage report.
 
 ------------------------------------------------------------------------
 
@@ -127,28 +126,46 @@ request.
 
 **Available commands**
 
-  Command      Description
-  ------------ --------------------------------
-  `/reset`     Reset the current conversation
-  `/history`   Display conversation history
-  `/exit`      Exit KAIRO
+  Command            Description
+  ------------------ -----------------------------------------------------
+  `/new`             Start a new conversation
+  `/reset`           Alias for `/new`
+  `/history`         Display the current conversation history
+  `/conversations`   List saved conversations
+  `/resume <id>`     Resume a saved conversation by ID
+  `/delete <id>`     Delete a saved conversation (confirmation required)
+  `/exit`            Exit KAIRO
 
 ### 3. Conversation Management
 
 -   Dedicated `ConversationManager`.
--   Maintains message history during an active session.
--   Supports contextual follow-up questions.
+-   Maintains message history and supports contextual follow-up
+    questions.
 -   Configurable conversation history limit.
 -   Trims history by complete user exchanges, preserving associated tool
     calls and results.
--   Conversation reset and history inspection.
--   Rolls back the newly appended user message if request processing
-    fails.
+-   Rolls back newly appended messages if request processing fails.
+-   Starts new conversations without deleting previous conversations.
+-   Automatically generates a title from the first user message.
+-   Supports listing, resuming, and deleting saved conversations.
+-   Automatically resumes the most recently updated conversation on
+    application startup.
 
-> Conversation history is currently maintained in memory and is not
-> persisted across application restarts.
+### 4. Persistent Conversation Storage
 
-### 4. Agent Orchestration
+-   SQLite-backed `ConversationStore`.
+-   Persists conversation metadata and message history across restarts.
+-   Stores message payloads as JSON, preserving tool calls and metadata.
+-   Reconstructs the system prompt when a conversation is restored
+    rather than storing it in the conversation transcript.
+-   Deletes associated messages when a conversation is deleted.
+-   Keeps the local database under `data/`, which is excluded from Git.
+
+> This feature persists conversation transcripts. Semantic long-term
+> memory, automatic fact extraction, and user-preference memory are
+> separate future capabilities.
+
+### 5. Agent Orchestration
 
 -   Discovers available MCP tools at runtime.
 -   Converts MCP tool schemas into Ollama-compatible function
@@ -158,7 +175,7 @@ request.
 -   Returns tool results to the LLM for further reasoning.
 -   Handles MCP tool errors and execution failures.
 
-### 5. MCP Tool Execution and Safety
+### 6. MCP Tool Execution and Safety
 
 -   Validates tool arguments against required and supported schema
     properties.
@@ -168,7 +185,7 @@ request.
 -   Uses conservative retry behaviour for potentially state-changing
     operations when connection status is uncertain.
 
-### 6. MCP Connection Management and Crash Recovery
+### 7. MCP Connection Management and Crash Recovery
 
 -   Establishes and closes MCP client sessions.
 -   Handles MCP server startup failures with a readable error.
@@ -181,7 +198,7 @@ request.
     outcome may be uncertain.
 -   Recovers from actual MCP server subprocess termination.
 
-### 7. Notepad MCP Server
+### 8. Notepad MCP Server
 
 The Notepad MCP server uses Python and STDIO transport.
 
@@ -194,14 +211,14 @@ The Notepad MCP server uses Python and STDIO transport.
   `delete_note`    Delete a note (requires approval through KAIRO)
   `search_notes`   Search across notes
 
-### 8. MCP Resources
+### 9. MCP Resources
 
   Resource URI          Description
   --------------------- --------------------------------------
   `notes://list`        Discover available notes
   `note://{filename}`   Access an individual note's contents
 
-### 9. MCP Prompts
+### 10. MCP Prompts
 
   Prompt             Description
   ------------------ ----------------------------------------------
@@ -262,6 +279,7 @@ kairo/
 │       ├── resources.py
 │       └── prompts.py
 │
+├── data/                  # Local SQLite database (Git-ignored)
 ├── notes/
 ├── tests/
 │
@@ -443,7 +461,10 @@ prompts.
 -   [x] Conversation history and context management
 -   [x] Conversation reset functionality
 -   [x] Conversation history inspection
--   [ ] Persistent conversational memory
+-   [x] SQLite-backed persistent conversation storage
+-   [x] Restore the most recently updated conversation on startup
+-   [x] Create, list, resume, and delete conversations
+-   [x] Automatic conversation titles
 
 ### Phase 3: Intelligent Agent Architecture
 
@@ -487,7 +508,9 @@ KAIRO aims to evolve into a personal desktop AI ecosystem capable of:
 -   Understanding natural-language instructions.
 -   Running local language models.
 -   Maintaining contextual conversations.
--   Remembering useful information across sessions.
+-   Restoring conversation transcripts across application sessions.
+-   Remembering useful information through future semantic long-term
+    memory.
 -   Interacting with tools through MCP.
 -   Managing files and directories.
 -   Automating desktop operations.
@@ -508,5 +531,6 @@ GitHub: [@kaushikbargaway](https://github.com/kaushikbargaway)
 
 ------------------------------------------------------------------------
 
-*KAIRO is an actively developed personal project. Features and
-architecture will evolve as development progresses.*
+*KAIRO v0.2.0 introduces persistent conversation storage. Semantic
+long-term memory and additional desktop capabilities remain part of the
+development roadmap.*
