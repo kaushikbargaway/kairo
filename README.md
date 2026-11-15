@@ -2,16 +2,13 @@
 
 ### Kaushik's AI for Interactive Reasoning and Orchestration
 
-**A Personal Desktop AI Assistant powered by Ollama and the Model
-Context Protocol (MCP)**
+**A personal desktop AI assistant powered by Ollama and the Model
+Context Protocol (MCP).**
 
-KAIRO is an extensible, locally running AI assistant designed to
-understand natural-language requests and interact with external tools
-through MCP.
-
-Built with Python, Ollama, and the MCP Python SDK, KAIRO combines local
-LLM inference, conversation management, agent orchestration, and an
-MCP-based tool execution layer.
+KAIRO is an extensible, locally running AI assistant that understands
+natural-language requests and interacts with external tools through MCP.
+It combines local LLM inference, conversation management, agent
+orchestration, and MCP-based tool execution.
 
 > Building an intelligent desktop companion, one capability at a time.
 
@@ -23,21 +20,32 @@ KAIRO uses a modular architecture that separates language-model
 interaction, conversation management, agent orchestration, MCP client
 communication, and MCP server capabilities.
 
-The assistant currently uses **Qwen3 1.7B through Ollama** for local
+The current implementation uses **Qwen3 1.7B through Ollama** for local
 inference. The `ConversationManager` maintains contextual message
 history during an active session, while the `AgentOrchestrator`
-discovers MCP tools, makes them available to the LLM, executes requested
-tools, and feeds their results back into the conversation.
+discovers MCP tools, exposes them to the LLM, executes requested tools,
+and returns their results to the conversation.
 
-The current MCP integration includes a Notepad server with tools to
-create, read, append, delete, list, and search text notes. It also
-exposes MCP resources and prompts.
+The current MCP integration includes a Notepad server with six tools,
+two resources, and two prompts. KAIRO also includes argument validation,
+approval before note deletion, error handling, automatic reconnection,
+and controlled retry behaviour.
 
-KAIRO includes tool argument validation, approval before note deletion,
-MCP error handling, and automatic reconnection for recoverable
-connection failures. Read-only tool calls can be retried after
-reconnection. Potentially state-changing operations are not
-automatically repeated when their execution status is uncertain.
+### Current Test Status
+
+  Metric                                   Result
+  ------------------------------- ---------------
+  Tests collected                             113
+  Passed                                  **111**
+  Skipped                                       2
+  Failed                                    **0**
+  Statement coverage                     **100%**
+  Statements measured                         300
+  Execution time (recorded run)     41.03 seconds
+
+The two skipped tests are optional Ollama integration tests. They
+require the `KAIRO_RUN_OLLAMA_INTEGRATION=1` environment variable and a
+running local Ollama instance.
 
 ------------------------------------------------------------------------
 
@@ -54,37 +62,49 @@ automatically repeated when their execution status is uncertain.
                     Message History
                            |
                            v
-                      KAIRO LLM
-                        Ollama
-                     Qwen3 1.7B
+                       KAIRO LLM
+                         Ollama
+                       Qwen3 1.7B
                            |
                            v
-                  AGENT ORCHESTRATOR
-             Tool Discovery and Execution Loop
+                   AGENT ORCHESTRATOR
+              Tool Discovery and Execution Loop
                            |
                            v
-                     TOOL REGISTRY
+                      TOOL REGISTRY
                 MCP Schemas -> Ollama Tools
                            |
                            v
-                     TOOL EXECUTOR
-            Validation and Approval Management
+                      TOOL EXECUTOR
+             Argument Validation and Approval
                            |
                            v
-                      MCP CLIENT
-                  STDIO Communication
+                       MCP CLIENT
+                   STDIO Communication
                            |
                            v
                     NOTEPAD MCP SERVER
-                 +---------+---------+
-                 |         |         |
-               TOOLS   RESOURCES  PROMPTS
-                 |         |         |
-                 +---------+---------+
+                  +---------+---------+
+                  |         |         |
+                TOOLS   RESOURCES  PROMPTS
+                  |         |         |
+                  +---------+---------+
                            |
                            v
-                     LOCAL NOTES
+                       LOCAL NOTES
 ```
+
+### Recovery flow
+
+KAIRO detects recoverable MCP connection failures during tool discovery
+and execution. It attempts to reconnect to the server and retries
+eligible read-only operations once. Operations that may modify data are
+not automatically repeated when their execution status is uncertain.
+
+The recovery tests include termination of the actual MCP server
+subprocess and verification that the Orchestrator reconnects, starts a
+replacement process, retries a read-only operation, and completes the
+request.
 
 ------------------------------------------------------------------------
 
@@ -122,9 +142,11 @@ automatically repeated when their execution status is uncertain.
 -   Trims history by complete user exchanges, preserving associated tool
     calls and results.
 -   Conversation reset and history inspection.
+-   Rolls back the newly appended user message if request processing
+    fails.
 
-*Conversation history is currently maintained in memory and is not
-persisted across application restarts.*
+> Conversation history is currently maintained in memory and is not
+> persisted across application restarts.
 
 ### 4. Agent Orchestration
 
@@ -142,22 +164,22 @@ persisted across application restarts.*
     properties.
 -   Requests user approval before executing `delete_note`.
 -   Prevents deletion when approval is unavailable or declined.
--   Distinguishes MCP tool errors using the SDK's `is_error` result
-    field.
+-   Handles MCP tool errors through the SDK's `is_error` result field.
 -   Uses conservative retry behaviour for potentially state-changing
     operations when connection status is uncertain.
 
-### 6. MCP Connection Management
+### 6. MCP Connection Management and Crash Recovery
 
 -   Establishes and closes MCP client sessions.
 -   Handles MCP server startup failures with a readable error.
 -   Detects connection-related failures during tool discovery and
     execution.
--   Attempts to reconnect when the MCP connection is lost.
+-   Attempts automatic reconnection when the MCP connection is lost.
 -   Retries eligible read-only operations once after successful
     reconnection.
 -   Avoids automatically repeating write or delete operations when the
     outcome may be uncertain.
+-   Recovers from actual MCP server subprocess termination.
 
 ### 7. Notepad MCP Server
 
@@ -174,13 +196,17 @@ The Notepad MCP server uses Python and STDIO transport.
 
 ### 8. MCP Resources
 
--   `notes://list` -- Discover available notes.
--   `note://{filename}` -- Access an individual note's contents.
+  Resource URI          Description
+  --------------------- --------------------------------------
+  `notes://list`        Discover available notes
+  `note://{filename}`   Access an individual note's contents
 
 ### 9. MCP Prompts
 
--   `summarize_note` -- Provides instructions for summarizing a note.
--   `improve_note` -- Provides instructions for improving a note.
+  Prompt             Description
+  ------------------ ----------------------------------------------
+  `summarize_note`   Provides instructions for summarizing a note
+  `improve_note`     Provides instructions for improving a note
 
 ------------------------------------------------------------------------
 
@@ -197,7 +223,7 @@ The Notepad MCP server uses Python and STDIO transport.
   Tool Integration Protocol   Model Context Protocol
   MCP SDK                     Python MCP SDK
   Communication Transport     STDIO
-  Testing and Inspection      Python test scripts, MCP Inspector
+  Testing                     pytest, pytest-asyncio, pytest-cov
   Version Control             Git and GitHub
 
 ------------------------------------------------------------------------
@@ -240,8 +266,10 @@ kairo/
 ├── tests/
 │
 ├── main.py
-├── .gitignore
+├── pytest.ini
 ├── requirements.txt
+├── requirements-dev.txt
+├── .gitignore
 └── README.md
 ```
 
@@ -257,7 +285,7 @@ kairo/
 
 ### 1. Clone the Repository
 
-``` bash
+``` powershell
 git clone https://github.com/kaushikbargaway/kairo.git
 cd kairo
 ```
@@ -269,8 +297,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks script execution in the current terminal, you can
-run:
+If PowerShell blocks script execution in the current terminal, run:
 
 ``` powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
@@ -280,8 +307,16 @@ Then activate the environment again.
 
 ### 3. Install Dependencies
 
+Install runtime dependencies:
+
 ``` powershell
 python -m pip install -r requirements.txt
+```
+
+To install the development and testing dependencies as well:
+
+``` powershell
+python -m pip install -r requirements-dev.txt
 ```
 
 ### 4. Install Ollama and Pull the Model
@@ -312,30 +347,65 @@ python main.py
 ```
 
 KAIRO connects to the local Ollama service and launches its Notepad MCP
-server through the MCP client using STDIO. **You do not need to start
-the Notepad MCP server in a separate terminal.**
+server through the MCP client using STDIO. You do not need to start the
+Notepad MCP server in a separate terminal.
 
 ------------------------------------------------------------------------
 
 ## Testing
 
-Test scripts are kept in the root-level `tests/` directory.
+KAIRO uses `pytest` for unit and integration testing. Tests are located
+in the root-level `tests/` directory.
 
-Run a test module from the project root using:
+### Run the complete test suite
 
 ``` powershell
-python -m tests.test_reconnect
+python -m pytest -v
 ```
 
-Replace `test_reconnect` with the relevant test module name. Individual
-test scripts may have their own setup requirements.
+### Run tests with coverage
+
+``` powershell
+python -m pytest --cov=agent --cov=conversation --cov=ollama_client --cov=client --cov=servers.notepad --cov-report=term-missing -v
+```
+
+### Run a specific test module
+
+``` powershell
+python -m pytest tests/test_orchestrator_process_crash.py -v -s
+```
+
+### Run optional Ollama integration tests
+
+The Ollama integration tests use a real local model and require Ollama
+to be running with the configured model available.
+
+In PowerShell:
+
+``` powershell
+$env:KAIRO_RUN_OLLAMA_INTEGRATION="1"
+python -m pytest tests/test_ollama_integration.py tests/test_multiturn_integration.py -v -s
+Remove-Item Env:KAIRO_RUN_OLLAMA_INTEGRATION
+```
+
+### Crash-recovery test coverage
+
+The test suite includes:
+
+-   MCP client disconnection and reconnection.
+-   Recovery after an actual MCP server subprocess is terminated.
+-   Orchestrator detection of a lost connection.
+-   Automatic reconnection and retry of a read-only operation.
+-   Verification that a replacement MCP server process is running.
+-   Protection against automatically retrying potentially state-changing
+    operations.
 
 ### Testing the MCP Server with MCP Inspector
 
 The Notepad MCP server can also be inspected using the official MCP
 Inspector.
 
-``` bash
+``` powershell
 npx -y @modelcontextprotocol/inspector
 ```
 
@@ -387,8 +457,9 @@ prompts.
 -   [x] Approval workflow for note deletion
 -   [x] MCP startup failure handling
 -   [x] MCP reconnection and read-operation retry
--   [ ] Expanded automated test coverage
--   [ ] More comprehensive retry and recovery tests
+-   [x] Automated unit and integration tests
+-   [x] Actual MCP server process-crash recovery testing
+-   [x] 100% statement coverage across measured project modules
 
 ### Phase 4: Desktop Capabilities
 
