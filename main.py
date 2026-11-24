@@ -465,7 +465,7 @@ async def main():
                 continue
 
             # Resume a previous conversation
-            elif command.startswith("/resume"):
+            elif command == "/resume" or command.startswith("/resume "):
 
                 parts = user_input.split(maxsplit=1)
 
@@ -496,7 +496,7 @@ async def main():
                 continue
 
             # Delete a saved conversation
-            elif command.startswith("/delete"):
+            elif command == "/delete" or command.startswith("/delete "):
 
                 parts = user_input.split(maxsplit=1)
 

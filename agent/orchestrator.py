@@ -11,6 +11,15 @@ class AgentOrchestrator:
         max_iterations=5,
         approval_callback=None
     ):
+        if (
+            not isinstance(max_iterations, int)
+            or isinstance(max_iterations, bool)
+            or max_iterations < 1
+        ):
+            raise ValueError(
+                "max_iterations must be a positive integer."
+            )
+
         self.llm = llm
         self.mcp_client = mcp_client
         self.max_iterations = max_iterations
@@ -205,7 +214,14 @@ class AgentOrchestrator:
                     "content": tool_result
                 })
 
-        return "Maximum tool execution iterations reached."
+        final_response = "Maximum tool execution iterations reached."
+
+        messages.append({
+            "role": "assistant",
+            "content": final_response
+        })
+
+        return final_response
 
     @staticmethod
     def _extract_result(result):

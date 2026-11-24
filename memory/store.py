@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import uuid
 
 from pathlib import Path
 from contextlib import contextmanager
@@ -10,10 +11,23 @@ from memory.models import Memory, MemoryCategory, current_timestamp
 class MemoryStore:
 
     def __init__(self, db_path="data/kairo.db"):
-
         self.db_path = str(db_path)
+        self._use_uri = self.db_path == ":memory:"
+        self._memory_keeper = None
 
-        if self.db_path != ":memory:":
+        if self._use_uri:
+            self._connection_string = (
+                f"file:kairo_memory_{uuid.uuid4().hex}"
+                "?mode=memory&cache=shared"
+            )
+
+            self._memory_keeper = sqlite3.connect(
+                self._connection_string,
+                uri=True
+            )
+        else:
+            self._connection_string = self.db_path
+
             Path(self.db_path).parent.mkdir(
                 parents=True,
                 exist_ok=True
@@ -25,7 +39,8 @@ class MemoryStore:
     def _connection(self):
 
         connection = sqlite3.connect(
-            self.db_path,
+            self._connection_string,
+            uri=self._use_uri,
             timeout=10
         )
 
@@ -347,7 +362,8 @@ class MemoryStore:
                 SELECT *
                 FROM memories
                 WHERE embedding_json IS NULL
-                   OR embedding_model != ?
+                    OR embedding_model IS NULL
+                    OR embedding_model != ?
                 """,
                 (model,)
             ).fetchall()
