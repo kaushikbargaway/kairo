@@ -28,6 +28,13 @@ most recently updated conversation, start new conversations, list saved
 conversations, resume a conversation by ID, and delete a conversation
 with user confirmation.
 
+KAIRO also includes a separate semantic long-term memory subsystem. It
+extracts durable information from conversations, stores structured
+memories in SQLite, detects near-duplicates, generates embeddings through
+Ollama's `all-minilm` model, and retrieves relevant memories using cosine
+similarity. Retrieved memories are added to the LLM request context without
+being written into the conversation transcript.
+
 The `AgentOrchestrator` discovers MCP tools, exposes them to the LLM,
 executes requested tools, and returns their results to the conversation.
 
@@ -38,13 +45,16 @@ and controlled retry behaviour.
 
 ### Current Test Status
 
-The full automated test suite has passed during v0.2.0 development. The
-two optional Ollama integration tests are skipped by default. They
-require the `KAIRO_RUN_OLLAMA_INTEGRATION=1` environment variable and a
-running local Ollama instance.
+The v0.2.0 automated test suite passed before the v0.3.0 memory work
+began. The v0.3.0 memory and conversation-context changes are currently
+under development; their full regression and coverage run is planned
+after the implementation is complete. The two optional Ollama integration
+tests are skipped by default and require the
+`KAIRO_RUN_OLLAMA_INTEGRATION=1` environment variable and a running local
+Ollama instance.
 
 Run the coverage command in the [Testing](#testing) section to generate
-the current local coverage report.
+a local coverage report.
 
 ------------------------------------------------------------------------
 
@@ -134,6 +144,12 @@ request.
   `/conversations`   List saved conversations
   `/resume <id>`     Resume a saved conversation by ID
   `/delete <id>`     Delete a saved conversation (confirmation required)
+  `/memory`          Show memory overview and available commands
+  `/memory list`     List stored memories
+  `/memory search`   Search memories semantically
+  `/memory category` List memories in a category
+  `/memory delete`   Delete a memory (confirmation required)
+  `/memory stats`    Show memory statistics
   `/exit`            Exit KAIRO
 
 ### 3. Conversation Management
@@ -150,6 +166,9 @@ request.
 -   Supports listing, resuming, and deleting saved conversations.
 -   Automatically resumes the most recently updated conversation on
     application startup.
+-   Retrieves relevant long-term memories for the current user request.
+-   Keeps retrieved memory context temporary rather than persisting it as
+    part of the conversation transcript.
 
 ### 4. Persistent Conversation Storage
 
@@ -160,12 +179,26 @@ request.
     rather than storing it in the conversation transcript.
 -   Deletes associated messages when a conversation is deleted.
 -   Keeps the local database under `data/`, which is excluded from Git.
+-   Shares the SQLite database file with the semantic memory subsystem.
 
-> This feature persists conversation transcripts. Semantic long-term
-> memory, automatic fact extraction, and user-preference memory are
-> separate future capabilities.
+### 5. Semantic Long-Term Memory
 
-### 5. Agent Orchestration
+-   Extracts potentially useful, durable facts from user messages with the
+    local LLM.
+-   Categorizes memories as personal, project, professional, education,
+    preference, or general.
+-   Stores memory content, source information, importance, confidence,
+    timestamps, and metadata in SQLite.
+-   Detects near-duplicate memories and merges selected metadata.
+-   Generates text embeddings using Ollama and the `all-minilm` model.
+-   Performs semantic retrieval using cosine similarity.
+-   Tracks memory access timestamps.
+-   Injects relevant memories into the LLM request context while keeping
+    them separate from the saved conversation transcript.
+-   Provides CLI commands to list, search, filter, inspect statistics,
+    and delete memories.
+
+### 6. Agent Orchestration
 
 -   Discovers available MCP tools at runtime.
 -   Converts MCP tool schemas into Ollama-compatible function
@@ -175,7 +208,7 @@ request.
 -   Returns tool results to the LLM for further reasoning.
 -   Handles MCP tool errors and execution failures.
 
-### 6. MCP Tool Execution and Safety
+### 7. MCP Tool Execution and Safety
 
 -   Validates tool arguments against required and supported schema
     properties.
@@ -185,7 +218,7 @@ request.
 -   Uses conservative retry behaviour for potentially state-changing
     operations when connection status is uncertain.
 
-### 7. MCP Connection Management and Crash Recovery
+### 8. MCP Connection Management and Crash Recovery
 
 -   Establishes and closes MCP client sessions.
 -   Handles MCP server startup failures with a readable error.
@@ -198,7 +231,7 @@ request.
     outcome may be uncertain.
 -   Recovers from actual MCP server subprocess termination.
 
-### 8. Notepad MCP Server
+### 9. Notepad MCP Server
 
 The Notepad MCP server uses Python and STDIO transport.
 
@@ -211,14 +244,14 @@ The Notepad MCP server uses Python and STDIO transport.
   `delete_note`    Delete a note (requires approval through KAIRO)
   `search_notes`   Search across notes
 
-### 9. MCP Resources
+### 10. MCP Resources
 
   Resource URI          Description
   --------------------- --------------------------------------
   `notes://list`        Discover available notes
   `note://{filename}`   Access an individual note's contents
 
-### 10. MCP Prompts
+### 11. MCP Prompts
 
   Prompt             Description
   ------------------ ----------------------------------------------
@@ -237,6 +270,9 @@ The Notepad MCP server uses Python and STDIO transport.
   LLM Integration             Ollama Python SDK
   Agent Architecture          Custom Python agent orchestrator
   Conversation Management     Custom Python module
+  Persistent Storage           SQLite
+  Semantic Memory              Ollama embeddings + cosine similarity
+  Embedding Model              all-minilm
   Tool Integration Protocol   Model Context Protocol
   MCP SDK                     Python MCP SDK
   Communication Transport     STDIO
@@ -337,18 +373,19 @@ To install the development and testing dependencies as well:
 python -m pip install -r requirements-dev.txt
 ```
 
-### 4. Install Ollama and Pull the Model
+### 4. Install Ollama and Pull the Models
 
 Install Ollama from the [official download
 page](https://ollama.com/download).
 
-Pull KAIRO's default model:
+Pull KAIRO's default language model and embedding model:
 
 ``` powershell
 ollama pull qwen3:1.7b
+ollama pull all-minilm
 ```
 
-Verify that the model is available:
+Verify that the models are available:
 
 ``` powershell
 ollama list
@@ -384,7 +421,7 @@ python -m pytest -v
 ### Run tests with coverage
 
 ``` powershell
-python -m pytest --cov=agent --cov=conversation --cov=ollama_client --cov=client --cov=servers.notepad --cov-report=term-missing -v
+python -m pytest --cov=agent --cov=conversation --cov=memory --cov=ollama_client --cov=client --cov=servers.notepad --cov-report=term-missing -v
 ```
 
 ### Run a specific test module
@@ -482,7 +519,21 @@ prompts.
 -   [x] Actual MCP server process-crash recovery testing
 -   [x] 100% statement coverage across measured project modules
 
-### Phase 4: Desktop Capabilities
+### Phase 4: Semantic Long-Term Memory
+
+-   [x] Dedicated memory subsystem
+-   [x] Structured SQLite memory storage
+-   [x] Memory categories and metadata
+-   [x] LLM-based memory extraction
+-   [x] Duplicate detection and metadata merging
+-   [x] Ollama embedding generation
+-   [x] Semantic memory retrieval
+-   [x] Relevant memory injection into LLM context
+-   [x] Memory management CLI commands
+-   [ ] Conversation summarization and context optimization
+-   [ ] Full v0.3.0 regression and coverage validation
+
+### Phase 5: Desktop Capabilities
 
 -   [ ] Filesystem MCP server
 -   [ ] File and directory management
@@ -491,13 +542,13 @@ prompts.
 -   [ ] Voice-based interaction
 -   [ ] Multi-server MCP architecture
 
-### Phase 5: User Experience and Security
+### Phase 6: User Experience and Security
 
 -   [ ] Desktop application interface
 -   [ ] Real-time voice interaction
 -   [ ] Expanded security and permission management
 -   [ ] Logging and monitoring
--   [ ] Persistent memory and user preferences
+-   [ ] Advanced memory controls and permission management
 
 ------------------------------------------------------------------------
 
@@ -509,8 +560,7 @@ KAIRO aims to evolve into a personal desktop AI ecosystem capable of:
 -   Running local language models.
 -   Maintaining contextual conversations.
 -   Restoring conversation transcripts across application sessions.
--   Remembering useful information through future semantic long-term
-    memory.
+-   Remembering useful information through semantic long-term memory.
 -   Interacting with tools through MCP.
 -   Managing files and directories.
 -   Automating desktop operations.
@@ -531,6 +581,5 @@ GitHub: [@kaushikbargaway](https://github.com/kaushikbargaway)
 
 ------------------------------------------------------------------------
 
-*KAIRO v0.2.0 introduces persistent conversation storage. Semantic
-long-term memory and additional desktop capabilities remain part of the
-development roadmap.*
+*KAIRO v0.3.0 is under development, introducing semantic long-term
+memory and conversation-context optimization.*
